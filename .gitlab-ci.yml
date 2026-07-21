@@ -1,0 +1,46 @@
+include:
+  - project: 'fp/open-source/os-ci'
+    file:
+      - '.gitlab-ci.yml'
+
+variables:
+  CURL: /sw/gs/git-prod/dist/linux/bin/
+  GITLAB_SERVICES_HOME: /gns/area/certified/com/gs/gitlab/gitlab-services/gitlab-services-4.0
+  JAVA_HOME: /sw/external/jdk-11/
+  NODE: /gns/area/certified/external/org/nodejs/node.js/node_v12.21.0_linux_x64-12.21.0.gns/node_v12.21.0_linux_x64/node-v12.21.0-linux-x64/bin
+  GS_PYPI_URL: "http://pypi.site.gs.com/simple"
+  GS_PYPI_HOST: "pypi.site.gs.com"
+  
+stages:
+  - .pre
+  - test
+  - clmscan
+  - etch_upload
+  - .post
+  
+cloud_etch_upload:
+  stage: etch_upload
+  tags:
+  - linux
+  - default
+  - kubernetes
+  image: registry.aws.site.gs.com:443/dx/ete/cloudetch-uploader:current
+  script:
+  - "$CLOUD_ETCH_UPLOAD"
+  
+test:py310:
+  image: "registry.aws.site.gs.com:443/dx/py-eng/python-images/python3.10-rhel8-prod:current"
+  stage: test 
+  tags: [ linux, default, kubernetes ]
+  before_script:
+    - export PYTHONPATH=.
+    - export PATH=$NODE:$CURL:$JAVA_HOME/bin:$GITLAB_SERVICES_HOME/scripts:$PATH
+    - python3 -V
+    - pip3 install -i $GS_PYPI_URL --trusted-host $GS_PYPI_HOST --upgrade pip
+    - pip3 install -i $GS_PYPI_URL --trusted-host $GS_PYPI_HOST .[test]
+  script:
+    - pytest -rsx gs_quant/test --junitxml=pytest.xml
+  artifacts:
+    when: always
+    paths:
+      - "pytest.xml"
